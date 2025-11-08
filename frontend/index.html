@@ -1,0 +1,167 @@
+
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Portal Full Local</title>
+<link rel="stylesheet" href="app.css">
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+<div id="app" class="container">
+  <div class="header">
+    <h1>Job Portal</h1>
+    <div v-if="user">
+      <img v-if="user.profilePhoto" :src="base + user.profilePhoto" class="profile-photo" style="width:40px;height:40px">
+      <span class="small">Hi, {{ user.name }} ({{ user.role }})</span>
+      <button class="button" @click="logout">Logout</button>
+    </div>
+  </div>
+
+  <div v-if="page==='welcome'" class="card">
+    <h2>Welcome</h2>
+    <div class="tabs">
+      <div :class="['tab', authTab==='login' && 'active']" @click="authTab='login'">Login</div>
+      <div :class="['tab', authTab==='register' && 'active']" @click="authTab='register'">Register</div>
+    </div>
+    <div class="form">
+      <div v-if="authTab==='register'">
+        <input v-model="auth.name" placeholder="Full name">
+        <select v-model="auth.role"><option value="student">student</option><option value="recruiter">recruiter</option></select>
+      </div>
+      <input v-model="auth.email" placeholder="Email">
+      <input v-model="auth.password" placeholder="Password" type="password">
+      <div style="text-align:right"><button class="button" @click="submitAuth">{{ authTab==='login' ? 'Login' : 'Register' }}</button></div>
+    </div>
+  </div>
+
+  <!-- Student dashboard -->
+  <div v-if="page==='student'">
+    <div class="card">
+      <h2>Student Dashboard</h2>
+      <div class="tabs">
+        <div :class="['tab', studentTab==='profile' && 'active']" @click="studentTab='profile'">Profile</div>
+        <div :class="['tab', studentTab==='jobs' && 'active']" @click="studentTab='jobs'">Jobs</div>
+        <div :class="['tab', studentTab==='apps' && 'active']" @click="studentTab='apps'">Application Status</div>
+      </div>
+
+      <div v-if="studentTab==='profile'">
+        <h3>Profile</h3>
+        <div>
+          <img v-if="profilePhotoPreview || (user && user.profilePhoto)" :src="profilePhotoPreview || (base + user.profilePhoto)" class="profile-photo">
+          <div v-else style="width:110px;height:110px;border-radius:50%;background:#eef2ff;display:inline-block"></div>
+        </div>
+        <div style="margin-top:8px">
+          <input type="file" @change="onFileChange($event,'photo')">
+          <button class="button" @click="uploadPhoto">Upload Photo</button>
+        </div>
+        <div class="form" style="margin-top:12px">
+          <input v-model="studentProfile.name" placeholder="Full name">
+          <input v-model="studentProfile.email" placeholder="Email">
+          <input v-model="studentProfile.dob" placeholder="Date of birth">
+          <input v-model="studentProfile.gender" placeholder="Gender">
+          <input v-model="studentProfile.college" placeholder="College">
+          <h4>Upload Documents</h4>
+          <input type="file" @change="onFileChange($event,'doc10')">
+          <input type="file" @change="onFileChange($event,'doc12')">
+          <input type="file" @change="onFileChange($event,'ug')">
+          <input type="file" @change="onFileChange($event,'pg')">
+          <input type="file" @change="onFileChange($event,'resume')">
+          <button class="button" @click="uploadDocs">Upload Documents</button>
+        </div>
+      </div>
+
+      <div v-if="studentTab==='jobs'">
+        <h3>Jobs</h3>
+        <div v-for="job in jobs" :key="job._id" class="job-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>{{ job.title }}</strong><div class="small">{{ job.country }} | {{ job.workMode }} | {{ job.salary }}</div></div>
+            <div class="small">{{ job.applicantCount || 0 }} applied</div>
+          </div>
+          <p class="small">{{ job.jd }}</p>
+          <div style="text-align:right"><button class="button" @click="apply(job)">Apply</button></div>
+        </div>
+      </div>
+
+      <div v-if="studentTab==='apps'">
+        <h3>My Applications</h3>
+        <table class="card" style="width:100%">
+          <tr><th>Job</th><th>Status</th><th>Applied At</th></tr>
+          <tr v-for="a in applications" :key="a._id">
+            <td>{{ a.job.title }}</td>
+            <td>{{ a.status }}</td>
+            <td>{{ new Date(a.createdAt).toLocaleString() }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recruiter dashboard -->
+  <div v-if="page==='recruiter'">
+    <div class="card">
+      <h2>Recruiter Dashboard</h2>
+      <div class="tabs">
+        <div :class="['tab', recruiterTab==='profile' && 'active']" @click="recruiterTab='profile'">Profile</div>
+        <div :class="['tab', recruiterTab==='post' && 'active']" @click="recruiterTab='post'">Post Job</div>
+        <div :class="['tab', recruiterTab==='apps' && 'active']" @click="recruiterTab='apps'">Applications</div>
+      </div>
+
+      <div v-if="recruiterTab==='profile'">
+        <h3>Profile</h3>
+        <div>
+          <img v-if="profilePhotoPreview || (user && user.profilePhoto)" :src="profilePhotoPreview || (base + user.profilePhoto)" class="profile-photo">
+          <div v-else style="width:110px;height:110px;border-radius:50%;background:#eef2ff;display:inline-block"></div>
+        </div>
+        <div style="margin-top:8px">
+          <input type="file" @change="onFileChange($event,'photo')">
+          <button class="button" @click="uploadPhoto">Upload Photo</button>
+        </div>
+        <div class="form" style="margin-top:12px">
+          <input v-model="recruiterProfile.name" placeholder="Name">
+          <input v-model="recruiterProfile.email" placeholder="Email">
+          <input v-model="recruiterProfile.company" placeholder="Company">
+        </div>
+      </div>
+
+      <div v-if="recruiterTab==='post'">
+        <h3>Post Job</h3>
+        <div class="form">
+          <input v-model="newJob.title" placeholder="Title">
+          <input v-model="newJob.country" placeholder="Country">
+          <input v-model="newJob.workMode" placeholder="Work Mode">
+          <input v-model="newJob.salary" placeholder="Salary">
+          <textarea v-model="newJob.jd" placeholder="Job description"></textarea>
+          <div style="text-align:right"><button class="button" @click="postJob">Post Job</button></div>
+        </div>
+      </div>
+
+      <div v-if="recruiterTab==='apps'">
+        <h3>Applicants</h3>
+        <div v-for="app in recruiterApplications" :key="app._id" class="job-card">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img v-if="app.student.profilePhoto" :src="base + app.student.profilePhoto" style="width:50px;height:50px;border-radius:50%;object-fit:cover">
+            <div><strong>{{ app.student.name }}</strong><br><small>{{ app.student.email }}</small></div>
+          </div>
+          <div class="small">Applied for: {{ app.job.title }}</div>
+          <div style="margin-top:8px">
+            <a v-if="app.student.documents && app.student.documents.resume" :href="base + app.student.documents.resume" target="_blank">Resume</a>
+            <a v-if="app.student.documents && app.student.documents.doc10" :href="base + app.student.documents.doc10" target="_blank">10th</a>
+            <a v-if="app.student.documents && app.student.documents.doc12" :href="base + app.student.documents.doc12" target="_blank">12th</a>
+          </div>
+          <div style="margin-top:8px">
+            <button class="button" @click="updateStatus(app,'Shortlisted')">Shortlist</button>
+            <button class="button" @click="updateStatus(app,'Rejected')">Reject</button>
+            <button class="button" @click="updateStatus(app,'Hired')">Hire</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+<script src="axios.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
